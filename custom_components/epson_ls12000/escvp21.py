@@ -225,7 +225,16 @@ class EscVpClient:
                         await self._send_raw_locked(b"\r")
                         await self._read_until_prompt_locked()
                 except Exception as err:  # noqa: BLE001
-                    _LOGGER.debug("Keepalive failed: %s", err)
+                    _LOGGER.debug("Keepalive failed: %s; dropping session", err)
+                    # Drop the socket inline so the next user command sees
+                    # `connected == False` and goes through a full reconnect.
+                    # We deliberately do NOT call _close_locked() here because
+                    # it would await this very task and deadlock.
+                    async with self._lock:
+                        if self._writer is not None:
+                            _close_writer(self._writer)
+                        self._reader = None
+                        self._writer = None
                     return
         except asyncio.CancelledError:
             return
@@ -238,7 +247,7 @@ class EscVpClient:
         For queries ('FOO?'), returns the right side of 'FOO=<val>'.
         For sets, returns ''.
         Raises EscVpCommandError when the projector returns 'ERR'.
-        Reconnects transparently if the socket has dropped.
+        Reconnects transparently if the socket has dropped or stalled.
         """
         async with self._lock:
             for attempt in (1, 2):
@@ -248,11 +257,21 @@ class EscVpClient:
                     return await asyncio.wait_for(
                         self._exchange_locked(body), timeout=timeout
                     )
-                except (ConnectionError, asyncio.IncompleteReadError) as err:
-                    _LOGGER.debug("ESC/VP21 socket dropped (%s); reconnect", err)
+                except (
+                    ConnectionError,
+                    asyncio.IncompleteReadError,
+                    asyncio.TimeoutError,
+                    TimeoutError,
+                    OSError,
+                ) as err:
+                    _LOGGER.debug(
+                        "ESC/VP21 transport failed on %r (%s); reconnect", body, err
+                    )
                     await self._close_locked()
                     if attempt == 2:
-                        raise EscVpError("ESC/VP21 connection lost") from err
+                        raise EscVpError(
+                            f"ESC/VP21 transport failed for {body!r}: {err}"
+                        ) from err
             raise EscVpError("Unreachable")
 
     async def _exchange_locked(self, body: str) -> str:

@@ -1,0 +1,13 @@
+{
+  "domain": "epson_ls12000",
+  "name": "Epson LS12000 (authenticated)",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/your-user/epson-ls12000-ha",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/your-user/epson-ls12000-ha/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

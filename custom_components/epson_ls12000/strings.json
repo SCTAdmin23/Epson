@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Epson LS12000",
+        "description": "Enter the projector's network details. Leave a password blank if the corresponding protocol is unprotected on the projector.",
+        "data": {
+          "host": "Hostname or IP address",
+          "pjlink_port": "PJLink port",
+          "pjlink_password": "PJLink password",
+          "escvp_port": "ESC/VP.net port",
+          "escvp_password": "ESC/VP.net (Web Control) password"
+        }
+      }
+    },
+    "error": {
+      "pjlink_auth": "PJLink password rejected by the projector",
+      "pjlink_unreachable": "PJLink port did not respond — check the IP and that PJLink is enabled in the projector's network menu",
+      "escvp_auth": "ESC/VP.net password rejected by the projector",
+      "escvp_unreachable": "ESC/VP.net port did not respond — check the IP and that Network Control / Web Control is enabled"
+    },
+    "abort": {
+      "already_configured": "This projector is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Epson LS12000 options",
+        "data": {
+          "scan_interval": "Poll interval (seconds, 5–300)"
+        }
+      }
+    }
+  }
+}

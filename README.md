@@ -26,17 +26,23 @@ password set.
   client keeps the socket warm with a `\r` keepalive every 4 minutes to
   avoid the 10-minute idle cutoff documented in the ESC/VP.net manual §5.6.
 
-## Install (HACS, private repo)
+## Install via HACS
 
-1. `git init` this folder, push to a private GitHub repo, push.
-2. In Home Assistant: **HACS → Integrations → ⋮ → Custom repositories**.
-   Add your repo URL, category **Integration**.
-3. **Download** "Epson LS12000 (authenticated)". Restart Home Assistant.
-4. **Settings → Devices & Services → Add Integration → Epson LS12000**.
+1. In Home Assistant: **HACS → Integrations → ⋮ → Custom repositories**.
+2. Add `https://github.com/SCTAdmin23/Epson` with category **Integration**.
+3. **Download** "Epson LS12000 (authenticated)" (it will pick up the
+   latest release tag).
+4. Restart Home Assistant.
+5. **Settings → Devices & Services → Add Integration → Epson LS12000**.
    Enter:
     - IP / hostname
     - PJLink password (leave blank if PJLink is unprotected)
     - ESC/VP.net password (the projector's **Web Control** password)
+
+> Note: if the repository is private, HACS's OAuth token must have access
+> to it. The easiest workaround is to make the repository public (this
+> codebase contains no secrets — credentials are entered at runtime in
+> the config flow).
 
 ## Install (no HACS)
 

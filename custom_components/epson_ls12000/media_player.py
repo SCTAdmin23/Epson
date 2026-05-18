@@ -77,29 +77,36 @@ class EpsonMediaPlayer(EpsonEntity, MediaPlayerEntity):
         return CODE_TO_CMODE.get(code)
 
     async def async_turn_on(self) -> None:
-        await self._send("PWR ON")
+        await self._power(True)
 
     async def async_turn_off(self) -> None:
-        await self._send("PWR OFF")
+        await self._power(False)
 
     async def async_select_source(self, source: str) -> None:
         code = SOURCE_TO_CODE.get(source)
         if code is None:
             _LOGGER.warning("Unknown source: %s", source)
             return
-        await self._send(f"SOURCE {code}")
+        await self._send_escvp(f"SOURCE {code}")
 
     async def async_select_sound_mode(self, sound_mode: str) -> None:
         code = CMODE_TO_CODE.get(sound_mode)
         if code is None:
             return
-        await self._send(f"CMODE {code}")
+        await self._send_escvp(f"CMODE {code}")
 
-    async def _send(self, body: str) -> None:
+    async def _power(self, on: bool) -> None:
         try:
-            # PWR ON/OFF can take 30+ seconds; widen the timeout for those.
-            timeout = 60.0 if body.startswith("PWR ") else 10.0
-            await self._runtime.escvp.command(body, timeout=timeout)
+            await self._runtime.power(on)
+        except EscVpError as err:
+            _LOGGER.error("Power %s failed on both protocols: %s",
+                          "on" if on else "off", err)
+            return
+        await self.coordinator.async_request_refresh()
+
+    async def _send_escvp(self, body: str) -> None:
+        try:
+            await self._runtime.escvp.command(body, timeout=10.0)
         except EscVpError as err:
             _LOGGER.error("ESC/VP21 command %r failed: %s", body, err)
             return

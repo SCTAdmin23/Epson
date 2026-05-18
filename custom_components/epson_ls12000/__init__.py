@@ -21,7 +21,7 @@ from .const import (
 )
 from .coordinator import EpsonCoordinator
 from .escvp21 import EscVpClient, EscVpError
-from .pjlink import PJLinkClient
+from .pjlink import PJLinkClient, PJLinkError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +41,29 @@ class EpsonRuntimeData:
     coordinator: EpsonCoordinator
     escvp: EscVpClient
     pjlink: PJLinkClient
+
+    async def power(self, on: bool) -> None:
+        """Turn the projector on or off using whichever protocol responds.
+
+        PJLink is tried first because it works in deep standby with no
+        session setup, while the ESC/VP.net listener on port 3629 may not
+        accept connections (or may stall the CONNECT handshake) until the
+        projector finishes waking. ESC/VP21 is the fallback for projectors
+        where PJLink is disabled or password-mismatched.
+        """
+        try:
+            if on:
+                await self.pjlink.power_on()
+            else:
+                await self.pjlink.power_off()
+            return
+        except PJLinkError as err:
+            _LOGGER.debug(
+                "PJLink power_%s failed (%s); falling back to ESC/VP21",
+                "on" if on else "off",
+                err,
+            )
+        await self.escvp.command("PWR ON" if on else "PWR OFF", timeout=60.0)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

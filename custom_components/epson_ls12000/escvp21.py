@@ -50,6 +50,11 @@ _STATUS_BAD_VERSION: Final = 0x55
 # Idle ping interval (server enforces 10-min cutoff per §5.6.1).
 _KEEPALIVE_INTERVAL: Final = 240.0
 
+# Handshake timeout — longer than per-command because the projector's
+# ESC/VP.net listener takes its time to respond to CONNECT when the unit is
+# in standby (Standby Mode: Communication On still goes through a wake-up).
+_HANDSHAKE_TIMEOUT: Final = 15.0
+
 
 class EscVpError(Exception):
     """Base error from the ESC/VP21 client."""
@@ -202,7 +207,9 @@ class EscVpClient:
         await writer.drain()
 
     async def _read_connect_response(self, reader: asyncio.StreamReader) -> int:
-        header = await asyncio.wait_for(reader.readexactly(16), timeout=ESCVP_TIMEOUT)
+        header = await asyncio.wait_for(
+            reader.readexactly(16), timeout=_HANDSHAKE_TIMEOUT
+        )
         type_id, status, nheaders = _parse_common(header)
         if type_id != _TYPE_CONNECT:
             raise EscVpError(
@@ -210,7 +217,7 @@ class EscVpClient:
             )
         if nheaders:
             await asyncio.wait_for(
-                reader.readexactly(18 * nheaders), timeout=ESCVP_TIMEOUT
+                reader.readexactly(18 * nheaders), timeout=_HANDSHAKE_TIMEOUT
             )
         return status
 
@@ -251,13 +258,17 @@ class EscVpClient:
         """
         async with self._lock:
             for attempt in (1, 2):
-                if not self.connected:
-                    await self._open_locked()
                 try:
+                    if not self.connected:
+                        await self._open_locked()
                     return await asyncio.wait_for(
                         self._exchange_locked(body), timeout=timeout
                     )
+                except (EscVpAuthError, EscVpCommandError):
+                    # Auth and ERR responses are not transient — don't retry.
+                    raise
                 except (
+                    EscVpError,
                     ConnectionError,
                     asyncio.IncompleteReadError,
                     asyncio.TimeoutError,

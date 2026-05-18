@@ -48,17 +48,20 @@ class EpsonRemote(EpsonEntity, RemoteEntity):
         return data.get("power") in ("on", "warmup")
 
     async def async_turn_on(self, activity: str | None = None, **kwargs: Any) -> None:
-        await self._dispatch("PWR ON")
+        await self._power(True)
 
     async def async_turn_off(self, activity: str | None = None, **kwargs: Any) -> None:
-        await self._dispatch("PWR OFF")
+        await self._power(False)
 
     async def async_send_command(
         self, command: Iterable[str], **kwargs: Any
     ) -> None:
         for raw in command:
             body = self._translate(raw)
-            await self._dispatch(body)
+            if body in ("PWR ON", "PWR OFF"):
+                await self._power(body == "PWR ON")
+            else:
+                await self._send_escvp(body)
 
     @staticmethod
     def _translate(raw: str) -> str:
@@ -68,10 +71,18 @@ class EpsonRemote(EpsonEntity, RemoteEntity):
             return f"KEY {code}"
         return token
 
-    async def _dispatch(self, body: str) -> None:
+    async def _power(self, on: bool) -> None:
         try:
-            timeout = 60.0 if body.startswith("PWR ") else 10.0
-            await self._runtime.escvp.command(body, timeout=timeout)
+            await self._runtime.power(on)
+        except EscVpError as err:
+            _LOGGER.error("Power %s failed on both protocols: %s",
+                          "on" if on else "off", err)
+            return
+        await self.coordinator.async_request_refresh()
+
+    async def _send_escvp(self, body: str) -> None:
+        try:
+            await self._runtime.escvp.command(body, timeout=10.0)
         except EscVpError as err:
             _LOGGER.error("ESC/VP21 command %r failed: %s", body, err)
             return

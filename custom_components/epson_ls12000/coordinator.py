@@ -13,6 +13,9 @@ from .const import DOMAIN, PWR_STATE
 from .escvp21 import EscVpClient, EscVpCommandError, EscVpError
 from .pjlink import PJLinkClient, PJLinkError
 
+# PJLink POWR? response codes (JBMIA spec).
+_PJLINK_POWR = {"0": "standby", "1": "on", "2": "cooldown", "3": "warmup"}
+
 _LOGGER = logging.getLogger(__name__)
 
 # Commands we poll while the projector is on. PWR is always polled; the rest
@@ -52,26 +55,26 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         data: dict[str, Any] = {}
-        try:
-            pwr_code = await self.escvp.command("PWR?")
-        except (EscVpError, asyncio.TimeoutError, TimeoutError, OSError) as err:
-            # Fall back to PJLink so we at least know if the projector is on.
-            # PJLink uses a fresh socket per command and survives the projector's
-            # cooldown / standby transitions better than the persistent ESC/VP21
-            # session, which the projector tends to drop on power state changes.
-            try:
-                pjlink_pwr = await self.pjlink.power_query()
-            except (PJLinkError, asyncio.TimeoutError, TimeoutError, OSError) as pjerr:
-                raise UpdateFailed(
-                    f"Both ESC/VP21 and PJLink polling failed: {err}; {pjerr}"
-                ) from err
-            data["power"] = {"0": "standby", "1": "on", "2": "cooldown", "3": "warmup"}.get(
-                pjlink_pwr, "unknown"
-            )
-            return data
 
-        data["power_code"] = pwr_code
-        data["power"] = PWR_STATE.get(pwr_code, "unknown")
+        # Power state comes from PJLink first — it works in every projector
+        # power state (including deep standby) with a fresh per-command socket,
+        # while ESC/VP.net on port 3629 can stall its handshake or refuse
+        # connections until the projector is fully awake. We only fall back to
+        # ESC/VP21's PWR? if PJLink itself errors out (port closed, password
+        # mismatch, network down).
+        try:
+            pjlink_raw = await self.pjlink.power_query()
+            data["power"] = _PJLINK_POWR.get(pjlink_raw, "unknown")
+        except (PJLinkError, asyncio.TimeoutError, TimeoutError, OSError) as pjerr:
+            _LOGGER.debug("PJLink power_query failed (%s); trying ESC/VP21", pjerr)
+            try:
+                pwr_code = await self.escvp.command("PWR?")
+            except (EscVpError, asyncio.TimeoutError, TimeoutError, OSError) as err:
+                raise UpdateFailed(
+                    f"PJLink and ESC/VP21 both failed: {pjerr}; {err}"
+                ) from err
+            data["power_code"] = pwr_code
+            data["power"] = PWR_STATE.get(pwr_code, "unknown")
 
         if data["power"] != "on":
             return data

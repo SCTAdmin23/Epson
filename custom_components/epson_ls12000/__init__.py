@@ -20,7 +20,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import EpsonCoordinator
-from .escvp21 import EscVpClient, EscVpError
+from .escvp21 import EscVpClient
 from .pjlink import PJLinkClient, PJLinkError
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,14 +80,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         password=entry.data.get(CONF_PJLINK_PASSWORD) or "",
     )
 
-    try:
-        await escvp.async_connect()
-    except EscVpError as err:
-        _LOGGER.warning(
-            "ESC/VP21 connect failed for %s during setup (will retry on demand): %s",
-            host,
-            err,
-        )
+    # No prewarm. The coordinator's first refresh opens the ESC/VP21 socket
+    # only when the projector is reachable, and the coordinator falls back
+    # to PJLink for power state when ESC/VP21 is unavailable (e.g., the
+    # projector is in deep standby and the listener on 3629 hasn't woken).
 
     coordinator = EpsonCoordinator(
         hass,

@@ -44,11 +44,6 @@ password set.
 > codebase contains no secrets — credentials are entered at runtime in
 > the config flow).
 
-## Install (no HACS)
-
-Copy `custom_components/epson_ls12000/` into your Home Assistant
-`/config/custom_components/` directory and restart.
-
 ## Projector setup checklist
 
 In the projector's network menu, make sure:
